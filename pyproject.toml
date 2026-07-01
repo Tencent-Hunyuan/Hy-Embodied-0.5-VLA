@@ -10,7 +10,7 @@ name = "hy-vla"
 version = "0.1.0"
 description = "Hy-Embodied-0.5-VLA: From Vision-Language-Action Models to a Real-World Robot Learning Stack"
 readme = "README.md"
-license = { file = "License.txt" }
+license = { file = "LICENSE" }
 requires-python = ">=3.10,<3.13"
 authors = [{ name = "Tencent Robotics X, HY Vision Team" }]
 keywords = ["vla", "robotics", "manipulation", "robotwin", "hy-embodied"]
@@ -77,8 +77,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/tencent/Hy-VLA"
-Repository = "https://github.com/tencent/Hy-VLA"
+Homepage = "https://github.com/Tencent-Hunyuan/Hy-Embodied-0.5-VLA"
+Repository = "https://github.com/Tencent-Hunyuan/Hy-Embodied-0.5-VLA"
 
 # =============================================================================
 # uv configuration

@@ -216,6 +216,60 @@ python scripts/vis_umi_episode.py -t table_000 -e 666
 python scripts/vis_umi_episode.py /path/to/Hy-Embodied-0.5-Data -e 0 --no-3d
 ```
 
+### 📍 Coordinate System
+
+Below we document the axis mappings and provide a reference transform for converting between the UMI and RoboTwin systems. 
+
+The transform below is provided as a reference for aligning with the UMI coordinate system. Our released checkpoints do **not** apply any special pre-processing — the network naturally adapts to different coordinate conventions after sufficient training iterations.
+
+#### Axis Mapping
+
+| Dataset | World Forward | World Left | World Up | Local Forward | Local Left | Local Up | Gripper Open | Gripper Close |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **UMI** | +X | +Y | +Z | +Y | +Z | +X | 0 | 90 |
+| **RoboTwin** | +Y | -X | +Z | +X | +Y | +Z | 1 | 0 |
+> **Note:** The gripper value represents the travel distance of the parallel gripper in millimeters (mm). `0` indicates the gripper is fully open, and `90` indicates it is fully closed.
+
+#### Coordinate Transform
+
+First, we represent the RoboTwin frames in the UMI world:
+
+* **World Rotation Matrix ($W$)**: Aligns the global world frames.
+
+$$
+W = \begin{bmatrix}
+0 & 1 & 0 \\
+-1 & 0 & 0 \\
+0 & 0 & 1
+\end{bmatrix}
+$$
+
+* **Local Permutation Matrix ($P$)**: Permutes the local axes to redefine the end-effector's local orientation.
+
+$$
+P = \begin{bmatrix}
+0 & 0 & 1 \\
+1 & 0 & 0 \\
+0 & 1 & 0
+\end{bmatrix}
+$$
+
+#### From RoboTwin to UMI
+
+Let $p_{\text{native}}$ and $R_{\text{native}}$ be the position vector and rotation matrix in RoboTwin, and $q_{\text{native}}$ be its quaternion. The mapping to UMI ($p_{\text{umi}}$, $R_{\text{umi}}$, $q_{\text{umi}}$) is:
+
+* **Position:** $p_{\text{umi}} = W p_{\text{native}}$
+* **Rotation Matrix:** $R_{\text{umi}} = W R_{\text{native}} P$
+* **Quaternion:** $q_{\text{umi}} = q_W \otimes q_{\text{native}} \otimes q_P$ (where $\otimes$ denotes quaternion multiplication)
+
+#### From UMI to RoboTwin (Inverse Transform)
+
+Since $W$ and $P$ are orthogonal matrices, their inverses are simply their transposes ($W^{-1} = W^T$, $P^{-1} = P^T$). The inverse mapping is:
+
+* **Position:** $p_{\text{native}} = W^T p_{\text{umi}}$
+* **Rotation Matrix:** $R_{\text{native}} = W^T R_{\text{umi}} P^T$
+* **Quaternion:** $q_{\text{native}} = q_W^{-1} \otimes q_{\text{umi}} \otimes q_P^{-1}$
+
 ## 🏋️ Training & Evaluation
 
 Hy-VLA supports multiple training workflows, each with corresponding evaluation results.
@@ -338,9 +392,9 @@ We thank the Hugging Face and LeRobot communities for their infrastructure and t
 If you find Hy-VLA useful for your research, please cite:
 
 ```bibtex
-@article{tencent2026hyembodied05vla,
+@article{zhang2026hy,
   title={Hy-Embodied-0.5-VLA: From Vision-Language-Action Models to a Real-World Robot Learning Stack},
-  author={Tencent Robotics X and Tencent Hy Team},
+  author={Zhang, He and Xiang, Lingzhu and Lin, Haitao and Huang, Zeyu and Wang, Minghui and Zhong, Dingyan and Dong, Yubo and Wu, Yihao and Rao, Yongming and Zhang, Dongsheng and others},
   journal={arXiv preprint arXiv:2606.14409},
   year={2026}
 }
