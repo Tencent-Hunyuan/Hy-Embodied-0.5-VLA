@@ -15,7 +15,7 @@
 
 """Vision-language-action dataset wrapper for Hy-VLA supervised training.
 
-Wraps :class:`hy_vla.data.hdf5_dataset.HDF5VLADataset` with image
+Wraps :class:`hy_vla.data.robotwin_dataset.RoboTwinVLADataset` with image
 augmentation, history-stack assembly, and the collator that produces
 the batch dict consumed by :class:`hy_vla.modeling_hy_vla.HyVLA.forward`.
 """
@@ -54,15 +54,16 @@ class VLADataset(Dataset):
         # call resolves to a fixed (episode, raw_step, instruction) triple.
         self.deterministic = bool(getattr(config.dataset, "deterministic", False))
 
-        # Auto-detect backend: Lance if lance_source is set,
-        # otherwise default to HDF5.
-        lance_source = getattr(config.dataset, "lance_source", None)
-        if lance_source is not None:
-            from .lance_dataset import LanceVLADataset
+        # Auto-detect backend via unified ``source`` key.
+        #   source="robotwin"  → RoboTwinVLADataset  (RoboTwin)
+        #   source="umi"       → LanceVLADataset  (UMI / Hy-Embodied)
+        dataset_source = getattr(config.dataset, "source", "robotwin")
+        if dataset_source == "umi":
+            from .umi_dataset import LanceVLADataset
             self.hdf5_dataset = LanceVLADataset(config)
         else:
-            from .hdf5_dataset import HDF5VLADataset
-            self.hdf5_dataset = HDF5VLADataset(config)
+            from .robotwin_dataset import RoboTwinVLADataset
+            self.hdf5_dataset = RoboTwinVLADataset(config)
 
         self.image_size = config.dataset.image_size
         self.auto_adjust_image_brightness = config.dataset.auto_adjust_image_brightness

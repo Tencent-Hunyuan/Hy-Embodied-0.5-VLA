@@ -38,24 +38,11 @@ from hy_vla.modeling_dual_tower import (
     HyDualTowerConfig,
     HyDualTower,
 )
-# HunYuanVL-MoT classes: prefer the upstream transformers fork pinned in
-# README.md (which ships the model under
-# ``transformers.models.hunyuan_vl_mot`` and registers it in the Auto*
-# maps). Fall back to the in-repo vendor copy at ``hy_vla.hunyuan_vl_mot``
-# whose import-time ``_register_hunyuan_vl_mot()`` plugs the same classes
-# into the transformers Auto* registries.
-try:
-    from transformers.models.hunyuan_vl_mot import (
-        HunYuanVLMoTConfig,
-        HunYuanVLMoTTextConfig,
-        HunYuanVLMoTForConditionalGeneration,
-    )
-except ImportError:
-    from hy_vla.hunyuan_vl_mot import (
-        HunYuanVLMoTConfig,
-        HunYuanVLMoTTextConfig,
-        HunYuanVLMoTForConditionalGeneration,
-    )
+from hy_vla.hunyuan_vl_mot import (
+    HunYuanVLMoTConfig,
+    HunYuanVLMoTTextConfig,
+    HunYuanVLMoTForConditionalGeneration,
+)
 
 # ---------------------------------------------------------------------------
 # Batch-dictionary key naming convention used by the data loader and the
@@ -719,7 +706,7 @@ class HyVLA(nn.Module):
 
         if losses_flow is not None:
             # Drop padded action dims before reducing.
-            losses_flow = losses_flow[:, :, : self.config.max_action_dim]
+            losses_flow = losses_flow[:, :, : self.config.action_feature.shape[0]]
             loss_flow = losses_flow.mean()
             loss_dict["flow_loss"] = loss_flow.item()
 
@@ -755,8 +742,11 @@ class HyVLA(nn.Module):
         else:
             pred_actions = results
             info = {"pred": pred_actions}
+        # Unpad pred to real action dims (drop trailing zero-padded channels).
+        original_action_dim = self.config.action_feature.shape[0]
+        info["pred"] = info["pred"][:, :, :original_action_dim]
         if actions is not None:
-            info["gt"] = actions
+            info["gt"] = actions[:, :, :original_action_dim]
         return info
 
     def prepare_images(self, batch):

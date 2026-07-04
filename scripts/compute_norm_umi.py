@@ -10,7 +10,7 @@
 """Compute Hy-VLA action normalization pickle from a Lance (LeRobot-format) dataset.
 
 Single-pass Welford accumulation over all episodes in all tables.
-Output layout (consumed by ``hy_vla.data.lance_dataset`` and ``robotwin_eval.policy_wrapper``)::
+Output layout (consumed by ``hy_vla.data.umi_dataset`` and ``robotwin_eval.policy_wrapper``)::
 
     {
         "qpos_mean":         (20,)            # per-frame proprio (PosRotMat)
@@ -34,17 +34,17 @@ Inputs:
 
 Usage
 -----
-python scripts/compute_norm_lance.py \\
-        --lance-source  /mnt/adtfs/upload_staging \\
+python scripts/compute_norm_umi.py \\
+        --lance-source  /path/to/lance_dataset \\
         --downsample-rate 3 \\
         --chunk-size  50 \\
         --output  /path/to/norm_stats_lance.pkl
 
     # HF Hub, single table, quick test
-python scripts/compute_norm_lance.py \\
+python scripts/compute_norm_umi.py \\
         --tables table_001 \\
         --max-episodes 100 \\
-        --output /tmp/norm_stats.pkl
+        --output /path/to/norm_stats.pkl
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from hy_vla.data.lance_dataset import LanceTableReader  # noqa: E402
+from hy_vla.data.umi_dataset import LanceTableReader  # noqa: E402
 from hy_vla.utils.transform_utils import (  # noqa: E402
     convert_PosQuat2PosRotationMatrix_batch,
     dual_arm_poses_to_relative,
@@ -173,7 +173,7 @@ def compute(
         }
     else:
         if tables is None:
-            from hy_vla.data.lance_dataset import _list_lance_tables
+            from hy_vla.data.umi_dataset import _list_lance_tables
             tables = _list_lance_tables(repo_id=lance_source)
         readers = {
             tn: LanceTableReader(repo_id=lance_source, table_name=tn)

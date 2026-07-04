@@ -45,10 +45,11 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.lines import Line2D
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 from PIL import Image, ImageDraw, ImageFont
 from tqdm import tqdm
 
-from hy_vla.data.lance_dataset import LanceTableReader
+from hy_vla.data.umi_dataset import LanceTableReader
 
 warnings.filterwarnings("ignore", message="lance is not fork-safe")
 warnings.filterwarnings("ignore", message="lancedb fork support is experimental")
@@ -229,7 +230,7 @@ def build_3d_axes(state: np.ndarray, fig_w_in: float, fig_h_in: float, dpi: int)
     ax.tick_params(labelsize=6)
     ax.set_title("Trajectory", fontsize=9)
     fig.subplots_adjust(left=0.01, right=0.99, top=0.97, bottom=0.08)
-    ax.view_init(elev=35, azim=180)
+    ax.view_init(elev=30, azim=225)
     return fig, ax
 
 
@@ -294,27 +295,29 @@ def render_3d_panel(state: np.ndarray, size: int, dpi: int = 100):
     sc_r = ax_mk.scatter([], [], [], c="dodgerblue", s=80,
                           edgecolors="white", linewidths=1.5, zorder=10)
 
+    def _plot_triad(ax, origin, rot, length, colors):
+        """Draw 3-colour arrow-headed triad at *origin* using quiver."""
+        ox, oy, oz = origin
+        artists = []
+        for col_idx, clr in enumerate(colors):
+            d = rot[:, col_idx] * length
+            q = ax.quiver(ox, oy, oz, d[0], d[1], d[2],
+                          color=clr, arrow_length_ratio=0.22, lw=2.0,
+                          capstyle="butt", zorder=9)
+            artists.append(q)
+        return artists
+
+    TRIAD_L_COLORS = ("#e74c3c", "#2ecc71", "#3498db")
+    TRIAD_R_COLORS = ("#c0392b", "#27ae60", "#2980b9")
+
+    # Extract quaternions once (xyzw).
     if has_quat:
-        def _quat_to_rot(q):
-            qx, qy, qz, qw = q.astype(np.float64)
-            qx2, qy2, qz2 = qx * qx, qy * qy, qz * qz
-            return np.array([
-                [1.0 - 2.0*(qy2+qz2), 2.0*(qx*qy - qz*qw), 2.0*(qx*qz + qy*qw)],
-                [2.0*(qx*qy + qz*qw), 1.0 - 2.0*(qx2+qz2), 2.0*(qy*qz - qx*qw)],
-                [2.0*(qx*qz - qy*qw), 2.0*(qy*qz + qx*qw), 1.0 - 2.0*(qx2+qy2)],
-            ])
-
-        def _make_triad(ax, color):
-            return [ax.plot([], [], [], color=clr, lw=1.5,
-                            solid_capstyle="round", zorder=9)[0]
-                    for clr in color]
-
-        triad_l = _make_triad(ax_mk, ("#e74c3c", "#2ecc71", "#3498db"))
-        triad_r = _make_triad(ax_mk, ("#c0392b", "#27ae60", "#2980b9"))
+        quat_l = state[:, l_q0:l_q3 + 1]
+        quat_r = state[:, r_q0:r_q3 + 1]
 
     canvas_mk = FigureCanvasAgg(fig_mk)
     all_pts = np.concatenate([pos_l, pos_r], 0)
-    triad_len = np.ptp(all_pts, axis=0).max() * 0.08
+    triad_len = max(np.ptp(all_pts, axis=0).max(), 1e-3) * 0.16
 
     for t in range(T):
         sc_l._offsets3d = ([float(state[t, lx])],
@@ -325,16 +328,19 @@ def render_3d_panel(state: np.ndarray, size: int, dpi: int = 100):
                            [float(state[t, rz])])
 
         if has_quat:
+            # Remove old triad artists from previous frame.
+            for line in list(ax_mk.lines):
+                line.remove()
+            for col in list(ax_mk.collections):
+                if col not in (sc_l, sc_r):
+                    col.remove()
+
             p_l = state[t, [lx, ly, lz]].astype(np.float64)
             p_r = state[t, [rx, ry, rz]].astype(np.float64)
-            rot_l = _quat_to_rot(state[t, [l_q0, l_q1, l_q2, l_q3]])
-            rot_r = _quat_to_rot(state[t, [r_q0, r_q1, r_q2, r_q3]])
-            for i, line in enumerate(triad_l):
-                end = p_l + rot_l[:, i] * triad_len
-                line.set_data_3d([p_l[0], end[0]], [p_l[1], end[1]], [p_l[2], end[2]])
-            for i, line in enumerate(triad_r):
-                end = p_r + rot_r[:, i] * triad_len
-                line.set_data_3d([p_r[0], end[0]], [p_r[1], end[1]], [p_r[2], end[2]])
+            rot_l = R.from_quat(quat_l[t]).as_matrix()
+            rot_r = R.from_quat(quat_r[t]).as_matrix()
+            _plot_triad(ax_mk, p_l, rot_l, triad_len, TRIAD_L_COLORS)
+            _plot_triad(ax_mk, p_r, rot_r, triad_len, TRIAD_R_COLORS)
 
         canvas_mk.draw()
         rgba = np.asarray(canvas_mk.buffer_rgba()).copy()

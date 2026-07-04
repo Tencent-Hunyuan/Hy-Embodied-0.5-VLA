@@ -18,19 +18,10 @@
 # --- Core deep-learning stack -------------------------------------------------
 torch>=2.4
 numpy>=1.24,<2.0
-# transformers: pinned to the same upstream commit HY-Embodied uses
-# (see https://github.com/Tencent-Hunyuan/HY-Embodied/blob/main/requirements.txt).
-# This commit ships the `HunYuanVLMoT*` classes under
-# `transformers.models.hunyuan_vl_mot` and registers them in the Auto*
-# maps, so `AutoConfig.from_pretrained("tencent/HY-Embodied-0.5")` works
-# without `trust_remote_code=True`. (At this commit the classes are NOT
-# re-exported from the top-level `transformers` package, so direct
-# imports must use the submodule path.) If this URL is unreachable
-# (offline / GFW), the in-repo vendor copy at `hy_vla/hunyuan_vl_mot/`
-# provides the same classes via an idempotent Auto* registration --
-# in that fallback path, any `transformers>=4.57` install is sufficient.
-# See README.md ("Installation").
-git+https://github.com/huggingface/transformers@9293856c419762ebf98fbe2bd9440f9ce7069f1a
+# transformers: HunYuanVL-MoT classes are provided by the in-repo vendor
+# copy at ``hy_vla/hunyuan_vl_mot/`` (idempotent Auto* registration).
+# Set ``>=4.57`` as a safe lower bound.
+transformers>=4.57
 safetensors>=0.4
 huggingface-hub>=0.23
 
@@ -43,7 +34,7 @@ scipy>=1.11
 
 # --- Training entrypoint (hy_vla/train.py) -----------------------------------
 # All packages below are imported unconditionally by the training surface
-# (train.py, hy_vla/data/vla_dataset.py, hy_vla/data/hdf5_dataset.py and the
+# (train.py, hy_vla/data/vla_dataset.py, hy_vla/data/robotwin_dataset.py and the
 # utils helpers under hy_vla/utils/). They are NOT needed at inference /
 # RoboTwin evaluation time -- a deployment-only install can omit them.
 accelerate>=0.28

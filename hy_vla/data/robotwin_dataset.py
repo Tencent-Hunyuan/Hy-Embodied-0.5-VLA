@@ -31,6 +31,7 @@ import numpy as np
 from hy_vla.utils.transform_utils import (
     convert_PosQuat2PosRotationMatrix_batch,
     dual_arm_poses_to_relative,
+    convert_frame_robo_to_umi,
 )
 
 
@@ -126,7 +127,7 @@ def get_history_indices(step_id, history_size, interval, random_sample=True):
     return indices
 
 
-class HDF5VLADataset:
+class RoboTwinVLADataset:
     """
     This class is used to sample episodes from the embododiment dataset
     stored in HDF5.
@@ -140,7 +141,7 @@ class HDF5VLADataset:
 
         # ``dataset.dataset_index_csv`` overrides; default is
         # ``<repo_root>/assets/dataset_index.csv`` (this file lives at
-        # ``<repo_root>/hy_vla/data/hdf5_dataset.py``).
+        # ``<repo_root>/hy_vla/data/robotwin_dataset.py``).
         repo_root = os.path.dirname(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         )
@@ -153,7 +154,7 @@ class HDF5VLADataset:
             f"Set `dataset.dataset_index_csv` or place the CSV at "
             f"`assets/dataset_index.csv` under the repo root."
         )
-        print(f"[hdf5_dataset] dataset_index_csv: {dataset_index_csv}")
+        print(f"[robotwin_dataset] dataset_index_csv: {dataset_index_csv}")
         all_episodes = _load_dataset_csv(dataset_index_csv, HDF5_DIR)
 
         # Group by subset (first segment of ``episode_dir``) just to keep
@@ -171,7 +172,7 @@ class HDF5VLADataset:
             subset_name = ep["episode_dir"]
             eps_by_subset.setdefault(subset_name, []).append(ep)
         print(
-            f"[hdf5_dataset] filter_dirty: {self.filter_dirty} -- "
+            f"[robotwin_dataset] filter_dirty: {self.filter_dirty} -- "
             f"{n_total - n_dirty_dropped}/{n_total} episodes kept "
             f"({n_dirty_dropped} dirty dropped)"
         )
@@ -180,13 +181,30 @@ class HDF5VLADataset:
         # stack (K = ``img_history_size``); otherwise only the current
         # frame is delivered.
         self.use_video_encoder = bool(getattr(config.dataset, "use_video_encoder", False))
-        print(f"[hdf5_dataset] use_video_encoder: {self.use_video_encoder}")
+        print(f"[robotwin_dataset] use_video_encoder: {self.use_video_encoder}")
 
         self.action_type = config.dataset.act_type
-        print(f"[hdf5_dataset] action_type: {self.action_type}")
+        print(f"[robotwin_dataset] action_type: {self.action_type}")
+
+        # Optional: convert EEF poses to UMI coordinate frame.
+        self.umi_coord_frame = bool(getattr(config.dataset, "umi_coord_frame", False))
+        if self.umi_coord_frame:
+            print(
+                "[robotwin_dataset] umi_coord_frame=True: "
+                "applying world rotation W + local column permutation P "
+                "(W @ R_rd @ P, pos → W @ pos). "
+                "WARNING: normalization stats must be regenerated "
+                "with the same coord frame!"
+            )
+        self.umi_gripper_space = bool(getattr(config.dataset, "umi_gripper_space", False))
+        if self.umi_coord_frame and self.umi_gripper_space:
+            print(
+                "[robotwin_dataset] umi_gripper_space=True: "
+                "gripper values will also be mapped RoboTwin [1,0] → UMI [0,90]."
+            )
 
         self.downsample_rate = config.dataset.downsample_rate
-        print(f"[hdf5_dataset] downsample_rate: {self.downsample_rate}")
+        print(f"[robotwin_dataset] downsample_rate: {self.downsample_rate}")
 
         # Norm-stats pickle schema (produced by
         # ``utils/hdf5_normalization_process_relabs_chunk_ee.py``)::
@@ -230,7 +248,7 @@ class HDF5VLADataset:
                 assert n > 0 and n <= am.shape[0], (
                         f"chunk_slice={n} out of range [1, {am.shape[0]}] for {path}"
                 )
-                print(f"[hdf5_dataset] mean_std slice: {am.shape[0]} -> {n} ({path})")
+                print(f"[robotwin_dataset] mean_std slice: {am.shape[0]} -> {n} ({path})")
                 am = am[:n]
                 as_ = as_[:n]
                 if am_absolute is not None:
@@ -244,7 +262,7 @@ class HDF5VLADataset:
                 "normalizes states/actions with the loaded pkl."
             )
         mean_std_path = config.dataset.mean_std_path
-        print(f"[hdf5_dataset] mean_std_path: {mean_std_path}")
+        print(f"[robotwin_dataset] mean_std_path: {mean_std_path}")
         with_abs = "with_absolute" in self.action_type
         (
             self.qpos_mean,
@@ -268,7 +286,7 @@ class HDF5VLADataset:
             self.act_mean = np.concatenate([self.act_mean, _act_mean_abs], axis=0)
             self.act_std = np.concatenate([self.act_std, _act_std_abs], axis=0)
             print(
-                f"[hdf5_dataset] with_absolute: act_mean/std cat along time axis -> "
+                f"[robotwin_dataset] with_absolute: act_mean/std cat along time axis -> "
                 f"{self.act_mean.shape}"
             )
 
@@ -300,7 +318,7 @@ class HDF5VLADataset:
             config["dataset"].get("img_history_random_sample", True)
         )
         print(
-            f"[hdf5_dataset] img_history_size: {self.IMG_HISORY_SIZE}, "
+            f"[robotwin_dataset] img_history_size: {self.IMG_HISORY_SIZE}, "
             f"img_history_interval: {self.IMG_HISTORY_INTERVAL}, "
             f"img_history_random_sample: {self.IMG_HISTORY_RANDOM_SAMPLE}"
         )
@@ -312,7 +330,7 @@ class HDF5VLADataset:
         for subset_name in sorted(eps_by_subset.keys()):
             self.episodes.extend(eps_by_subset[subset_name])
 
-        print(f"[hdf5_dataset] num episodes: {len(self.episodes)}")
+        print(f"[robotwin_dataset] num episodes: {len(self.episodes)}")
 
         # Deterministic mode: expose a finite ordered list of
         # (episode_index, raw_step) pairs as the dataset index space
@@ -330,7 +348,7 @@ class HDF5VLADataset:
 
             self.deterministic_index = pairs
             print(
-                f"[hdf5_dataset] deterministic=True: enumerated "
+                f"[robotwin_dataset] deterministic=True: enumerated "
                 f"{len(self.deterministic_index)} (episode, raw_step) pairs "
                 f"across {len(self.episodes)} episodes"
             )
@@ -468,6 +486,10 @@ class HDF5VLADataset:
             qpos_converted[:, 3:7] = qpos[:, [4, 5, 6, 3]]
             qpos_converted[:, 11:15] = qpos[:, [12, 13, 14, 11]]
             qpos = qpos_converted
+
+            # Optional: convert to UMI coordinate frame.
+            if self.umi_coord_frame:
+                qpos = convert_frame_robo_to_umi(qpos, convert_gripper=self.umi_gripper_space)
 
             target_qpos = qpos.copy()
             qpos = convert_PosQuat2PosRotationMatrix_batch(qpos)

@@ -31,3 +31,7 @@ exc_action_size: 7
 # --- MEM video-encoder cadence -------------------------------------------
 img_history_size: 6
 img_history_interval: 5
+
+# --- UMI coordinate frame ------------------------------------------------
+umi_coord_frame: False
+umi_gripper_space: False

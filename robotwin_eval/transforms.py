@@ -46,7 +46,7 @@ def get_norm_data(pkl_path: str) -> dict[str, np.ndarray]:
     act_std_abs]) from a unified Hy-VLA norm-stats pickle.
 
     The pickle is the single artifact produced by
-``scripts/compute_norm_hdf5.py``:
+    ``scripts/compute_norm_robotwin.py``:
 
     Required keys::
         qpos_mean, qpos_std, action_mean, action_std
@@ -205,6 +205,7 @@ def relative_to_dual_arm_poses(relative_output: np.ndarray, start_dual_pose_xyzw
     pose_arm2 = _relative_matrices_to_poses(rel_arm2, start_arm2)
 
     return np.concatenate([pose_arm1, grip_arm1, pose_arm2, grip_arm2], axis=1)
+
 
 
 __all__ = [

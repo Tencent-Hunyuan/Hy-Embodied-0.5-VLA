@@ -34,16 +34,16 @@ classifiers = [
 #   with all 12.x and 13.x NVIDIA drivers) via `[tool.uv.sources]` below.
 # * `flash-attn` is pinned to a prebuilt cu12 / torch2.7 / cxx11abi=TRUE
 #   wheel from the upstream GitHub release page -- no nvcc / source build.
-# * `transformers` follows the same upstream commit HY-Embodied uses
-#   (https://github.com/Tencent-Hunyuan/HY-Embodied/blob/main/requirements.txt).
-#   PEP 508 direct references require
-#   `tool.hatch.metadata.allow-direct-references = true` (set below).
+# * `transformers` >=4.57 is sufficient; HunYuanVL-MoT classes are
+#   sourced from the in-repo module at ``hy_vla/hunyuan_vl_mot/``
+#   (formerly pinned to the HY-Embodied fork at
+#   git+https://github.com/huggingface/transformers@9293856c419762ebf98fbe2bd9440f9ce7069f1a).
 # -----------------------------------------------------------------------------
 dependencies = [
     # Core deep-learning stack (cu128 wheel selected via tool.uv.sources).
     "torch>=2.7,<2.8",
     "numpy>=1.24,<2.0",
-    "transformers @ git+https://github.com/huggingface/transformers@9293856c419762ebf98fbe2bd9440f9ce7069f1a",
+    "transformers>=4.57",
     "safetensors>=0.4",
     "huggingface-hub>=0.23",
     # Vision backbone
@@ -132,8 +132,6 @@ flash-attn = [
 # Hatch — tells hatch which package directories to ship in the wheel
 # =============================================================================
 [tool.hatch.metadata]
-# Required because `[project].dependencies` contains a `git+https://...`
-# direct reference for `transformers` (PEP 508 direct URL).
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]

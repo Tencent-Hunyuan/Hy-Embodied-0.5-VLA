@@ -37,6 +37,11 @@ from accelerate import Accelerator
 from accelerate.utils import DeepSpeedPlugin, ProjectConfiguration, set_seed
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 from transformers import logging as hf_logging
 
 try:
@@ -53,13 +58,7 @@ from hy_vla.data.vla_dataset import VLADataCollator, VLADataset
 from hy_vla.modeling_hy_vla import HyVLA, HyVLAConfig, _load_vlm_autoconfig
 from hy_vla.utils.logger import initialize_wandb, save_wandb
 
-# HunYuanVL-MoT class: prefer the upstream transformers fork pinned in
-# README.md; fall back to the in-repo vendor copy when the fork is
-# unavailable.
-try:
-    from transformers.models.hunyuan_vl_mot import HunYuanVLMoTForConditionalGeneration
-except ImportError:
-    from hy_vla.hunyuan_vl_mot import HunYuanVLMoTForConditionalGeneration
+from hy_vla.hunyuan_vl_mot import HunYuanVLMoTForConditionalGeneration
 
 hf_logging.set_verbosity_error()
 
@@ -374,6 +373,15 @@ def train(cfg: DictConfig) -> None:
         train_dataloader, current_step, steps_per_epoch, epoch_holder,
     )
 
+    _val_base_iter = iter(train_dataloader)
+    def val_batch_iterator():
+        nonlocal _val_base_iter
+        try:
+            return next(_val_base_iter)
+        except StopIteration:
+            _val_base_iter = iter(train_dataloader)
+            return next(_val_base_iter)
+
     progress_bar = tqdm(
         range(current_step, cfg.training.max_training_steps), ncols=100, disable=not accelerator.is_local_main_process
     )
@@ -428,13 +436,17 @@ def train(cfg: DictConfig) -> None:
             accelerator.print(f"\n Evaluate at n_iter {n_iter}.")
             eval_model = accelerator.unwrap_model(policy)
             eval_model.eval()
+
+            per_chunk_dists = []
+            per_dim_dists = []
+
             for i in tqdm(
                 range(cfg.training.max_evaluation_steps),
                 desc="Validation",
                 ncols=100,
                 disable=not accelerator.is_local_main_process,
             ):
-                batch = next(train_loader_iter)
+                batch = val_batch_iterator()
 
                 with torch.no_grad():
                     for key in batch.keys():
@@ -452,7 +464,12 @@ def train(cfg: DictConfig) -> None:
                     all_predictions, all_targets, all_loss = accelerator.gather_for_metrics(
                         (pred_actions, gt_actions, flow_loss)
                     )
-                    dist = (all_predictions[:, :, :20] - all_targets[:, :, :20]).abs().mean()
+                    l1_error = (all_predictions - all_targets).abs()
+                    per_chunk = l1_error.mean(dim=(0, 2))
+                    per_dim = l1_error.mean(dim=(0, 1))
+                    per_chunk_dists.append(per_chunk.cpu())
+                    per_dim_dists.append(per_dim.cpu())
+                    dist = l1_error.mean()
                     all_loss = all_loss.mean()
 
                 val_loss.append(all_loss.item())
@@ -460,14 +477,47 @@ def train(cfg: DictConfig) -> None:
             eval_model.train()
             if accelerator.is_main_process:
                 if not cfg.debug:
+                    # Average per-chunk / per-dim dists across eval steps.
+                    avg_per_chunk = torch.stack(per_chunk_dists).mean(dim=0)  # (n_chunks,)
+                    avg_per_dim = torch.stack(per_dim_dists).mean(dim=0)      # (n_dims,)
+
                     val_epoch_f = (n_iter + 1) / steps_per_epoch
-                    wandb.log({
+                    log_dict = {
                         "val/loss": np.mean(val_loss),
                         "val/angle dist": np.mean(angle_dist),
                         "val/iter": n_iter,
                         f"val/{epoch_metric_key}": epoch_holder[0],
                         f"val/{epoch_metric_key}_f": val_epoch_f,
-                    })
+                    }
+                    
+                    n_chunks = len(avg_per_chunk)
+                    n_dims = len(avg_per_dim)
+                    fig, (ax1, ax2) = plt.subplots(
+                        1, 2, figsize=(max(14, n_chunks * 0.3 + n_dims * 0.15), 5),
+                    )
+                    # Per-chunk subplot.
+                    ax1.bar(range(n_chunks), avg_per_chunk.detach().cpu().numpy(),
+                            color='steelblue', alpha=0.8)
+                    ax1.set_xlabel('Chunk index')
+                    ax1.set_ylabel('Mean L1 distance')
+                    ax1.set_title(f'Per-chunk distance (iter {n_iter})')
+                    ax1.grid(axis='y', alpha=0.3)
+                    # Per-dim subplot.
+                    ax2.bar(range(n_dims), avg_per_dim.detach().cpu().numpy(),
+                            color='coral', alpha=0.8)
+                    ax2.set_xlabel('Dimension index')
+                    ax2.set_ylabel('Mean L1 distance')
+                    ax2.set_title(f'Per-dim distance (iter {n_iter})')
+                    ax2.grid(axis='y', alpha=0.3)
+                    fig.tight_layout()
+                    plot_file = os.path.join(
+                        cfg.ckpt_save_dir, f"val_dists_iter_{n_iter:06d}.png",
+                    )
+                    fig.savefig(plot_file, dpi=50)
+                    plt.close(fig)
+                    log_dict["val/distance_breakdown"] = wandb.Image(plot_file)
+
+                    wandb.log(log_dict)
                     val_loss = []
                     angle_dist = []
 

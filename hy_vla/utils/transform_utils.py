@@ -121,3 +121,119 @@ def dual_arm_poses_to_relative(dual_pose_sequence):
     return np.concatenate(
         [delta_arm1, gripper_arm1, delta_arm2, gripper_arm2], axis=1
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# UMI coordinate-frame transforms (to/from RoboTwin)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def convert_frame_robo_to_umi(qpos: np.ndarray,
+                               convert_gripper: bool = False) -> np.ndarray:
+    """Convert dual-arm EE poses from native world to UMI coordinate frame.
+
+    Native world frame (RoboTwin):
+      X = right, Y = forward into screen, Z = up
+    UMI world frame:
+      X = forward, Y = left, Z = up
+
+    Local frame redefinition:
+      native local_x (forward) → UMI left
+      native local_y (left)    → UMI up
+      native local_z (up)      → UMI forward
+
+    Full transform:
+      p_umi = W @ p_native
+      R_umi = W @ R_native @ P
+    where  W = [[0,1,0],[-1,0,0],[0,0,1]]  (world rotation),
+           P = [[0,0,1],[1,0,0],[0,1,0]]   (local column cycle).
+
+    In scipy quaternion (xyzw) convention: q_umi = q_W * q_native * q_P.
+
+    Gripper convention (when ``convert_gripper=True``):
+      RoboTwin: open=1, close=0 (normalised 0-1).
+      UMI:      open=0, close=90 (raw mm units).
+      Mapping:  gripper_umi = (1 - gripper_native) * 90.
+
+    Args:
+        qpos: (T, 16) state in xyzw quaternion order.
+              Layout: [lx,ly,lz, lqx,lqy,lqz,lqw, lgrip,
+                       rx,ry,rz, rqx,rqy,rqz,rqw, rgrip]
+        convert_gripper: if True, also map gripper values from
+                         RoboTwin convention (0-1 norm) to UMI convention
+                         (0-90 mm).  Default False.
+    Returns:
+        (T, 16) state in xyzw, UMI world + local frame.
+    """
+    qpos = qpos.copy()
+    if qpos.shape[0] == 0:
+        return qpos
+    W = np.array([[0, 1, 0], [-1, 0, 0], [0, 0, 1]], dtype=np.float64)
+    P = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]], dtype=np.float64)
+    q_W = R.from_matrix(W)
+    q_P = R.from_matrix(P)
+
+    # position: pos_row @ W.T  ≡  W @ pos_col
+    qpos[:, 0:3] = qpos[:, 0:3] @ W.T
+    qpos[:, 8:11] = qpos[:, 8:11] @ W.T
+
+    # orientation (batch scipy Rotation)
+    left_quats = qpos[:, 3:7].astype(np.float64)
+    qpos[:, 3:7] = (q_W * R.from_quat(left_quats) * q_P).as_quat()
+
+    right_quats = qpos[:, 11:15].astype(np.float64)
+    qpos[:, 11:15] = (q_W * R.from_quat(right_quats) * q_P).as_quat()
+
+    # gripper: RoboTwin [1,0] → UMI [0,90]
+    if convert_gripper:
+        qpos[:, 7] = (1.0 - qpos[:, 7]) * 90.0
+        qpos[:, 15] = (1.0 - qpos[:, 15]) * 90.0
+
+    return qpos
+
+
+def convert_frame_umi_to_robo(qpos_umi: np.ndarray,
+                               convert_gripper: bool = False) -> np.ndarray:
+    """Inverse of ``convert_frame_robo_to_umi``: UMI → native world frame.
+
+      p_native = W^T @ p_umi
+      R_native = W^T @ R_umi @ P^T
+    In quat: q_native = q_W^{-1} * q_umi * q_P^{-1}.
+
+    Gripper convention (when ``convert_gripper=True``):
+      UMI:      open=0, close=90 (raw mm units).
+      RoboTwin: open=1, close=0 (normalised 0-1).
+      Mapping:  gripper_native = 1 - gripper_umi / 90.
+
+    Args:
+        qpos_umi: (T, 16) state in xyzw quaternion, UMI frame.
+        convert_gripper: if True, also map gripper values from
+                         UMI convention (0-90 mm) back to RoboTwin
+                         convention (0-1 norm).  Default False.
+    Returns:
+        (T, 16) state in xyzw quaternion, native world + local frame.
+    """
+    qpos = qpos_umi.copy()
+    if qpos.shape[0] == 0:
+        return qpos
+    W_T = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]], dtype=np.float64)
+    P_T = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]], dtype=np.float64)
+    q_W_inv = R.from_matrix(W_T)
+    q_P_inv = R.from_matrix(P_T)
+
+    # position
+    qpos[:, 0:3] = qpos[:, 0:3] @ W_T.T
+    qpos[:, 8:11] = qpos[:, 8:11] @ W_T.T
+
+    # orientation
+    left_quats = qpos[:, 3:7].astype(np.float64)
+    qpos[:, 3:7] = (q_W_inv * R.from_quat(left_quats) * q_P_inv).as_quat()
+
+    right_quats = qpos[:, 11:15].astype(np.float64)
+    qpos[:, 11:15] = (q_W_inv * R.from_quat(right_quats) * q_P_inv).as_quat()
+
+    # gripper: UMI [0,90] → RoboTwin [1,0]
+    if convert_gripper:
+        qpos[:, 7] = 1.0 - qpos[:, 7] / 90.0
+        qpos[:, 15] = 1.0 - qpos[:, 15] / 90.0
+
+    return qpos

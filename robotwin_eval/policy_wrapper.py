@@ -53,10 +53,14 @@ import torch
 from scipy.spatial.transform import Rotation as R, Slerp
 
 from hy_vla import HyVLAConfig, HyVLA
+from hy_vla.utils.transform_utils import (
+    convert_frame_robo_to_umi,
+    convert_frame_umi_to_robo,
+)
 
 from .transforms import (
-    convert_pose,
     get_norm_data,
+    pos_quat_to_pos_rotation_matrix,
     pos_rotation_matrix_to_pos_quat,
     relative_to_dual_arm_poses,
 )
@@ -120,6 +124,8 @@ class HyVLAPolicyWrapper:
         img_history_interval: int = 1,
         weight_dtype: torch.dtype = torch.bfloat16,
         vlm_model_path: str | None = None,
+        umi_coord_frame: bool = False,
+        umi_gripper_space: bool = False,
     ) -> None:
         # All architectural switches (chunk_size, use_video_encoder,
         # spacetime_layer_stride, past_drop_layer,
@@ -172,6 +178,10 @@ class HyVLAPolicyWrapper:
         self._left_imgs: list[np.ndarray] = []
         self._right_imgs: list[np.ndarray] = []
 
+        # UMI coordinate frame (must match training config).
+        self.umi_coord_frame = bool(umi_coord_frame)
+        self.umi_gripper_space = bool(umi_gripper_space)
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -204,13 +214,33 @@ class HyVLAPolicyWrapper:
             return self.action_cache.popleft()
 
         initial_ee_pose_wxyz = batch["observation.state"][0, :16].copy()
+        # wxyz → xyzw
         initial_ee_pose_xyzw = initial_ee_pose_wxyz.copy()
         initial_ee_pose_xyzw[3:7] = initial_ee_pose_wxyz[[4, 5, 6, 3]]
         initial_ee_pose_xyzw[11:15] = initial_ee_pose_wxyz[[12, 13, 14, 11]]
+        # RoboTwin → UMI coordinate frame (for RT-relative decode),
+        # only when norm_stats.pkl was computed in UMI frame.
+        if self.umi_coord_frame:
+            initial_ee_pose_umi = convert_frame_robo_to_umi(
+                initial_ee_pose_xyzw[None, :],
+                convert_gripper=self.umi_gripper_space,
+            )[0]
+        else:
+            initial_ee_pose_umi = initial_ee_pose_xyzw.copy()
 
-        batch["observation.state"] = convert_pose(
-            batch["observation.state"][0], self.norm_data["qpos_mean"], self.norm_data["qpos_std"]
-        )
+        # State: wxyz → xyzw → (optional) UMI → PosRotMat → normalize
+        state = batch["observation.state"][0].copy()
+        state[3:7] = state[[4, 5, 6, 3]]
+        state[11:15] = state[[12, 13, 14, 11]]
+        if self.umi_coord_frame:
+            state = convert_frame_robo_to_umi(
+                state[None, :], convert_gripper=self.umi_gripper_space,
+            )[0]
+        ee_prop = np.concatenate([
+            pos_quat_to_pos_rotation_matrix(state[:3], state[3:7], state[7]),
+            pos_quat_to_pos_rotation_matrix(state[8:11], state[11:15], state[15]),
+        ])
+        batch["observation.state"] = ((ee_prop - self.norm_data["qpos_mean"]) / self.norm_data["qpos_std"])[None, ...]
 
         if self.use_video_encoder:
             self._inject_history_stacks(batch)
@@ -228,9 +258,13 @@ class HyVLAPolicyWrapper:
             actions.append(self.policy._action_queue.popleft())
         actions = torch.cat(actions, dim=0).cpu().numpy()
 
-        actions_xyzw = self._decode_actions(actions, initial_ee_pose_xyzw)
+        actions_xyzw = self._decode_actions(actions, initial_ee_pose_umi)
 
-        # xyzw -> robotwin wxyz
+        # UMI → RoboTwin coordinate frame, then xyzw → wxyz
+        if self.umi_coord_frame:
+            actions_xyzw = convert_frame_umi_to_robo(
+                actions_xyzw, convert_gripper=self.umi_gripper_space,
+            )
         actions_wxyz = actions_xyzw.copy()
         actions_wxyz[:, 3:7] = actions_xyzw[:, [6, 3, 4, 5]]
         actions_wxyz[:, 11:15] = actions_xyzw[:, [14, 11, 12, 13]]
@@ -361,6 +395,8 @@ def build_policy(usr_args: dict[str, Any]) -> HyVLAPolicyWrapper:
         img_history_size=int(usr_args.get("img_history_size", 1)),
         img_history_interval=int(usr_args.get("img_history_interval", 1)),
         vlm_model_path=usr_args.get("vlm_model_path"),
+        umi_coord_frame=bool(usr_args.get("umi_coord_frame", False)),
+        umi_gripper_space=bool(usr_args.get("umi_gripper_space", False)),
     )
 
 

@@ -32,18 +32,10 @@ from torch import nn
 from transformers import AutoConfig, PretrainedConfig, PreTrainedModel
 from transformers.cache_utils import Cache
 
-# HunYuanVL-MoT classes: prefer the upstream transformers fork pinned in
-# README.md; fall back to the in-repo vendor copy when unavailable.
-try:
-    from transformers.models.hunyuan_vl_mot import HunYuanVLMoTForConditionalGeneration
-    from transformers.models.hunyuan_vl_mot.modeling_hunyuan_vl_mot import (
-        _HunYuanVLMoTTextForCausalLM,
-    )
-except ImportError:
-    from hy_vla.hunyuan_vl_mot import HunYuanVLMoTForConditionalGeneration
-    from hy_vla.hunyuan_vl_mot.modeling_hunyuan_vl_mot import (
-        _HunYuanVLMoTTextForCausalLM,
-    )
+from hy_vla.hunyuan_vl_mot import HunYuanVLMoTForConditionalGeneration
+from hy_vla.hunyuan_vl_mot.modeling_hunyuan_vl_mot import (
+    _HunYuanVLMoTTextForCausalLM,
+)
 
 
 def mask_apply(

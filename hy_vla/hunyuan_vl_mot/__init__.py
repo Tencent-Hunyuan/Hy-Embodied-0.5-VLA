@@ -12,26 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""HunYuanVL-MoT vendor copy (in-repo fallback for the HY-Embodied transformers fork).
+"""HunYuanVL-MoT model classes.
 
-The canonical open-source contract of HY-Embodied / Hy-VLA is to install
-the upstream transformers fork pinned in the README "Installation"
-section::
+Registers the ``hunyuan_vl_mot`` model family into the HuggingFace
+transformers ``Auto*`` registries at import time so that standard
+``AutoConfig / AutoModelForImageTextToText / AutoProcessor`` entrypoints
+work with ``tencent/HY-Embodied-*`` checkpoints.
 
-    pip install git+https://github.com/huggingface/transformers@9293856c...
-
-That fork ships the ``HunYuanVLMoT*`` classes natively at the top level,
-so ``AutoModelForImageTextToText.from_pretrained("tencent/HY-Embodied-0.5")``
-just works -- no vendor copy or ``trust_remote_code=True`` needed.
-
-This subpackage is the **fallback** for environments where that git+
-URL is unreachable (offline / firewalled). Importing it eagerly
-registers the ``hunyuan_vl_mot`` model family into the HuggingFace
-transformers ``Auto*`` registries so the same checkpoints continue to
-load via the standard ``AutoConfig / AutoModelForImageTextToText /
-``AutoProcessor`` entrypoints. Call sites in ``hy_vla.modeling_hy_vla`` /
-``hy_vla.train`` follow a ``try-from-transformers / except-from-vendor``
-pattern, so this code only executes when the fork is absent.
 Implementation note: the original upstream ``__init__.py`` used
 ``transformers.utils._LazyModule`` which replaces ``sys.modules[__name__]``
 and therefore prevents any code appearing after the replacement from

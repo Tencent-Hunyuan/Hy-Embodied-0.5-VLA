@@ -1,6 +1,7 @@
 # =============================================================================
 # UMI Lance dataset config
 # =============================================================================
+source: "umi"
 
 lance_source: "tencent/Hy-Embodied-0.5-VLA-Data"  # local dir or HF Hub repo id
 

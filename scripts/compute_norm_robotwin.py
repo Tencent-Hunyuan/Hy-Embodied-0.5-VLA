@@ -11,7 +11,7 @@
 
 The rel (RT) and abs (PosRotMat) Welford streams are accumulated in a
 SINGLE pass over the dataset and dumped into ONE pkl with the layout
-consumed by ``hy_vla.data.hdf5_dataset`` and
+consumed by ``hy_vla.data.robotwin_dataset`` and
 ``robotwin_eval.policy_wrapper``::
 
     {
@@ -33,6 +33,10 @@ Inputs:
     --output      destination pkl path
     --skip-dirty  drop episodes flagged ``is_dirty=1`` (default: keep them,
                   matches the released checkpoint training behaviour)
+    --umi-coord-frame   apply UMI coordinate transform to state before computing
+                  stats (see ``transform_utils.convert_frame_robo_to_umi``)
+    --umi-gripper-space  also convert gripper values from RoboTwin convention
+                  (0-1 norm) to UMI convention (0-90 mm). Requires --umi-coord-frame.
 
 This script intentionally drops every knob the open-source pipeline
 does not use:
@@ -44,14 +48,30 @@ does not use:
 
 Usage
 -----
-python scripts/compute_norm_hdf5.py \\
-        --csv         dataset_index.csv \\
-        --hdf5-dir    /path/to/robotwin \\
-        --downsample-rate 3 \\
-        --chunk-size  20 \\
-    --output      /path/to/Hy-VLA-RoboTwin/norm_stats.pkl
+python scripts/compute_norm_robotwin.py \
+        --csv         dataset_index.csv \
+        --hdf5-dir    /path/to/robotwin \
+        --downsample-rate 3 \
+        --chunk-size  20 \
+        --output      /path/to/Hy-VLA-RoboTwin/norm_stats.pkl
+
+python scripts/compute_norm_robotwin.py \
+        --csv         dataset_index.csv \
+        --hdf5-dir    /path/to/robotwin \
+        --umi-coord-frame \
+        --downsample-rate 3 \
+        --chunk-size  20 \
+        --output      /path/to/Hy-VLA-RoboTwin/norm_stats_umi.pkl
+
+python scripts/compute_norm_robotwin.py \
+        --csv         dataset_index.csv \
+        --hdf5-dir    /path/to/robotwin \
+        --umi-coord-frame \
+        --umi-gripper-space \
+        --downsample-rate 3 \
+        --chunk-size  20 \
+        --output      /path/to/Hy-VLA-RoboTwin/norm_stats_umi_with_gripper.pkl
 """
-from __future__ import annotations
 
 import argparse
 import csv
@@ -72,6 +92,7 @@ if str(REPO_ROOT) not in sys.path:
 from hy_vla.utils.transform_utils import (  # noqa: E402
     convert_PosQuat2PosRotationMatrix_batch,
     dual_arm_poses_to_relative,
+    convert_frame_robo_to_umi,
 )
 
 
@@ -106,7 +127,7 @@ def _finalize(count, mean, M2, kind: str, std_eps: float):
 
 
 # ---------------------------------------------------------------------------
-# CSV -> episode list (mirror of hy_vla.data.hdf5_dataset._load_dataset_csv)
+# CSV -> episode list (mirror of hy_vla.data.robotwin_dataset._load_dataset_csv)
 # ---------------------------------------------------------------------------
 def _load_episodes(csv_path: str, hdf5_dir: str, skip_dirty: bool) -> list[dict]:
     eps: list[dict] = []
@@ -146,12 +167,16 @@ def compute(
     downsample_rate: int,
     chunk_size: int,
     skip_dirty: bool,
+    umi_coord_frame: bool,
+    umi_gripper_space: bool = False,
 ) -> None:
     print(f"[config] csv               = {csv_path}")
     print(f"[config] hdf5_dir          = {hdf5_dir}")
     print(f"[config] downsample_rate   = {downsample_rate}")
     print(f"[config] chunk_size        = {chunk_size}")
     print(f"[config] skip_dirty        = {skip_dirty}")
+    print(f"[config] umi_coord_frame   = {umi_coord_frame}")
+    print(f"[config] umi_gripper_space = {umi_gripper_space}")
     print(f"[config] output            = {output_path}")
 
     eps = _load_episodes(csv_path, hdf5_dir, skip_dirty=skip_dirty)
@@ -185,6 +210,10 @@ def compute(
         qpos_converted[:, 3:7] = qpos[:, [4, 5, 6, 3]]
         qpos_converted[:, 11:15] = qpos[:, [12, 13, 14, 11]]
         qpos = qpos_converted
+
+        # Optional: UMI coordinate transform.
+        if umi_coord_frame:
+            qpos = convert_frame_robo_to_umi(qpos, convert_gripper=umi_gripper_space)
 
         # temporal downsample (e.g. 50Hz -> ~16.6Hz at ds=3)
         qpos = qpos[::downsample_rate]
@@ -285,7 +314,17 @@ def main() -> None:
                         help="Sliding-window length / action chunk (default: 20, matches the released ckpt).")
     parser.add_argument("--skip-dirty", action="store_true",
                         help="Drop episodes with is_dirty=1. Default: keep them.")
+    parser.add_argument("--umi-coord-frame", action="store_true",
+                        help="Apply convert_frame_robo_to_umi to state "
+                             "before computing stats (UMI coordinate frame).")
+    parser.add_argument("--umi-gripper-space", action="store_true",
+                        help="Also convert gripper values from RoboTwin convention "
+                             "(0-1 norm) to UMI convention (0-90 mm). "
+                             "Requires --umi-coord-frame to be set.")
     args = parser.parse_args()
+
+    if args.umi_gripper_space and not args.umi_coord_frame:
+        sys.exit("--umi-gripper-space requires --umi-coord-frame to be set")
 
     if not os.path.isfile(args.csv):
         sys.exit(f"--csv not found: {args.csv}")
@@ -303,6 +342,8 @@ def main() -> None:
         downsample_rate=args.downsample_rate,
         chunk_size=args.chunk_size,
         skip_dirty=args.skip_dirty,
+        umi_coord_frame=args.umi_coord_frame,
+        umi_gripper_space=args.umi_gripper_space,
     )
 
 

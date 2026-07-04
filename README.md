@@ -59,9 +59,10 @@ Hy-Embodied-0.5-VLA/
 │   ├── train_table_vlm.sh       # Single-table fast-iteration training
 │   ├── eval_robotwin_test.sh    # Quick RoboTwin regression (6 tasks)
 │   ├── eval_robotwin_full.sh    # Full RoboTwin sweep (50 tasks × 100 rollouts)
-│   ├── compute_norm_lance.py    # Pre-compute norm stats from Lance data
-│   ├── compute_norm_hdf5.py     # Pre-compute norm stats from HDF5 data
-│   └── vis_umi_episode.py       # Render an episode as MP4
+│   ├── compute_norm_umi.py      # Pre-compute norm stats from UMI data
+│   ├── compute_norm_robotwin.py # Pre-compute norm stats from RoboTwin data
+│   ├── vis_umi_episode.py       # Render a UMI episode as MP4
+│   └── vis_robotwin_episode.py  # Render a RoboTwin episode as MP4
 ├── robotwin_eval/               # RoboTwin adapter for evaluation
 ├── assets/                      # Example data and index files
 └── pyproject.toml               # Python project configuration (uv/pip)
@@ -96,7 +97,6 @@ uv sync
 pip install -r requirements.txt
 ```
 
-> **Note**: Hy-VLA depends on an upstream `transformers` fork that supports the Hy-Embodied MoT backbone. The pinned commit is specified in both `requirements.txt` and `pyproject.toml`. If the fork URL is unreachable, a verbatim vendor copy at `hy_vla/hunyuan_vl_mot/` serves as fallback.
 
 ## 🚀 Quick Start
 
@@ -159,7 +159,7 @@ Hy-VLA follows the Vision-Language-Action paradigm built on three components:
 | **Hy-VLA-UMI** | [`tencent/Hy-Embodied-0.5-VLA-UMI`](https://huggingface.co/tencent/Hy-Embodied-0.5-VLA-UMI) | [`Tencent-Hunyuan/Hy-Embodied-0.5-VLA-UMI`](https://modelscope.cn/models/Tencent-Hunyuan/Hy-Embodied-0.5-VLA-UMI) | Pre-trained on the Hy-UMI-10K corpus; intended as a generalist starting point for fine-tuning |
 | **Hy-VLA-RoboTwin** | [`tencent/Hy-Embodied-0.5-VLA-RoboTwin`](https://huggingface.co/tencent/Hy-Embodied-0.5-VLA-RoboTwin) | [`Tencent-Hunyuan/Hy-Embodied-0.5-VLA-RoboTwin`](https://modelscope.cn/models/Tencent-Hunyuan/Hy-Embodied-0.5-VLA-RoboTwin) | Post-trained on the RoboTwin 2.0 50-task benchmark |
 
-Both checkpoints are self-contained — they ship their own `tokenizer.json`, `vlm_config_dict`, `chat_template.jinja`, and pre-computed normalization statistics (`norm_stats.pkl`). If needed, you can regenerate normalization stats on your own data using `scripts/compute_norm_lance.py`.
+Both checkpoints are self-contained — they ship their own `tokenizer.json`, `vlm_config_dict`, `chat_template.jinja`, and pre-computed normalization statistics (`norm_stats.pkl`). If needed, you can regenerate normalization stats on your own data using `scripts/compute_norm_umi.py`.
 
 ## 📊 Data
 
@@ -184,7 +184,7 @@ Hy-VLA is pre-trained on **Hy-Embodied-0.5-VLA-Data**, a large-scale bimanual ma
 `LanceTableReader` reads a single Lance table (local or HF Hub):
 
 ```python
-from hy_vla.data.lance_dataset import LanceTableReader
+from hy_vla.data.umi_dataset import LanceTableReader
 
 # Local directory
 reader = LanceTableReader(root="./table_000")
@@ -376,7 +376,7 @@ FlowPRO operates iteratively:
 Required before the first training run:
 
 ```bash
-python scripts/compute_norm_lance.py \
+python scripts/compute_norm_umi.py \
     --lance-source tencent/Hy-Embodied-0.5-VLA-Data \
     --output norm_stats.pkl
 ```

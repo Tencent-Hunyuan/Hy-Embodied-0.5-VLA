@@ -398,7 +398,7 @@ class LanceVLADataset:
                     f"Requested tables not found: {sorted(missing)}. "
                     f"Available: {all_tables}")
 
-        print(f"[lance_dataset] tables: {self._table_names}")
+        print(f"[umi_dataset] tables: {self._table_names}")
 
         self._readers: Dict[str, LanceTableReader] = {}
         self._offsets: List[int] = [0]
@@ -414,7 +414,7 @@ class LanceVLADataset:
 
         self.total_frames = self._offsets[-1]
         self.total_episodes = sum(r.num_episodes for r in self._readers.values())
-        print(f"[lance_dataset] total frames: {self.total_frames}, "
+        print(f"[umi_dataset] total frames: {self.total_frames}, "
               f"total episodes: {self.total_episodes}")
 
         self.action_type = config.dataset.act_type
@@ -428,7 +428,7 @@ class LanceVLADataset:
             self.IMG_HISTORY_SIZE = raw_img_history_size
         else:
             if raw_img_history_size != 1:
-                print(f"[lance_dataset] WARN: use_video_encoder=False but "
+                print(f"[umi_dataset] WARN: use_video_encoder=False but "
                       f"img_history_size={raw_img_history_size}; forcing to 1")
             self.IMG_HISTORY_SIZE = 1
 
@@ -440,7 +440,7 @@ class LanceVLADataset:
         if not hasattr(config.dataset, "mean_std_path"):
             raise ValueError("dataset.mean_std_path is required.")
         mean_std_path = config.dataset.mean_std_path
-        print(f"[lance_dataset] mean_std_path: {mean_std_path}")
+        print(f"[umi_dataset] mean_std_path: {mean_std_path}")
         with_abs = "with_absolute" in self.action_type
         (self.qpos_mean, self.qpos_std, self.act_mean, self.act_std,
          _act_mean_abs, _act_std_abs) = _load_mean_std(
@@ -464,7 +464,7 @@ class LanceVLADataset:
                     for t in range(num_frames):
                         pairs.append((reader_idx, ep_idx, t))
             self.deterministic_index = pairs
-            print(f"[lance_dataset] deterministic: {len(pairs)} triples enumerated")
+            print(f"[umi_dataset] deterministic: {len(pairs)} triples enumerated")
 
     def _locate_global(self, global_idx: int) -> Tuple[int, str, int]:
         t = bisect_right(self._offsets, global_idx) - 1
@@ -512,7 +512,7 @@ class LanceVLADataset:
         try:
             return self._get_item_from_impl(table_idx, ep_idx, step)
         except Exception as e:
-            print(f"[lance_dataset] WARNING: _get_item_from failed "
+            print(f"[umi_dataset] WARNING: _get_item_from failed "
                   f"(table={self._table_names[table_idx]}, ep={ep_idx}, step={step}): {e}")
             traceback.print_exc()
             return False, None

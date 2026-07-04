@@ -1,10 +1,7 @@
 # =============================================================================
 # RoboTwin HDF5 dataset config
 # =============================================================================
-# Drives ``hy_vla.data.vla_dataset.VLADataset``. Override any field on the
-# CLI, e.g. ``+dataset.task_filter=null dataset.act_type=...`` (note Hydra's
-# `+` / `++` rules for adding/overriding leaf keys in dicts).
-# =============================================================================
+source: "robotwin"
 
 # HDF5 root directory. The dataset assumes one sub-folder per RoboTwin task.
 # Set this to the local directory where you stored the RoboTwin data.
@@ -127,5 +124,17 @@ deterministic: True
 # When True, the dataset emits a per-camera K-frame stack (K = ``img_history_size``)
 # and the collator returns 5D ``(B, K, C, H, W)`` tensors for the three main
 # camera keys, wiring the MEM space-time attention path end-to-end. Required
-# True for the released VLA post-training checkpoint.
+# Required True for the released VLA post-training checkpoint.
 use_video_encoder: True
+
+# -----------------------------------------------------------------------------
+# UMI coordinate frame
+# -----------------------------------------------------------------------------
+# When True, convert EE poses from native RoboTwin world frame to UMI
+# world frame before normalisation.  Requires norm_stats.pkl computed
+# with the same setting.
+umi_coord_frame: False
+# When True (only meaningful with ``umi_coord_frame=True``), additionally
+# convert gripper values from RoboTwin convention (open=1, close=0,
+# normalised 0-1) to UMI convention (open=0, close=90, raw mm).
+umi_gripper_space: False
