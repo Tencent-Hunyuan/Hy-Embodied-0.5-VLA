@@ -15,7 +15,7 @@
 
 """Space-time separable attention for the HYViT2 vision tower.
 
-MEM (Multi-frame Embodied Memory) wraps a vanilla ViT block with a
+MEM (Multi-scale Embodied Memory) wraps a vanilla ViT block with a
 "space-time separable attention" patch that reduces to identity when
 K=1 and adds a single causal time-softmax pass when K>1. The patch adds
 zero new parameters (the time embedding is a fixed sinusoidal e(t)

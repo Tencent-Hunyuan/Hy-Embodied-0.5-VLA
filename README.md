@@ -385,7 +385,7 @@ python scripts/compute_norm_umi.py \
 
 ## 🙏 Acknowledgements
 
-We thank the Hugging Face and LeRobot communities for their infrastructure and tooling. This work builds upon [Hy-Embodied-0.5](https://github.com/Tencent-Hunyuan/HY-Embodied), [FlowPRO](https://wuyeyexvnainai.github.io/flowpro/), and the [RoboTwin 2.0](https://github.com/robotwin-Platform/RoboTwin) benchmark.
+We thank the Hugging Face and LeRobot communities for their infrastructure and tooling. This work builds upon [Hy-Embodied-0.5](https://github.com/Tencent-Hunyuan/HY-Embodied), [FlowPRO](https://wuyeyexvnainai.github.io/flowpro/), [OpenPi](https://github.com/Physical-Intelligence/openpi) and the [RoboTwin 2.0](https://github.com/robotwin-Platform/RoboTwin) benchmark.
 
 ## 📚 Citation
 
