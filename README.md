@@ -56,14 +56,18 @@ Hy-Embodied-0.5-VLA/
 │   ├── train_umi_vlm.sh         # Stage-1 pre-training launcher
 │   ├── train_robotwin_vlm.sh    # Stage-2 SFT from VLM backbone
 │   ├── train_robotwin_umi.sh    # Stage-2 SFT from UMI pretrain
+│   ├── train_robodojo_umi.sh    # Stage-2 SFT from UMI pretrain on RoboDojo HDF5
 │   ├── train_table_vlm.sh       # Single-table fast-iteration training
 │   ├── eval_robotwin_test.sh    # Quick RoboTwin regression (6 tasks)
 │   ├── eval_robotwin_full.sh    # Full RoboTwin sweep (50 tasks × 100 rollouts)
 │   ├── compute_norm_umi.py      # Pre-compute norm stats from UMI data
 │   ├── compute_norm_robotwin.py # Pre-compute norm stats from RoboTwin data
+│   ├── compute_norm_robodojo.py # Pre-compute norm stats from RoboDojo data
 │   ├── vis_umi_episode.py       # Render a UMI episode as MP4
-│   └── vis_robotwin_episode.py  # Render a RoboTwin episode as MP4
+│   ├── vis_robotwin_episode.py  # Render a RoboTwin episode as MP4
+│   └── vis_robodojo_episode.py  # Render a RoboDojo episode as MP4
 ├── robotwin_eval/               # RoboTwin adapter for evaluation
+├── robodojo_eval/               # RoboDojo adapter for evaluation
 ├── assets/                      # Example data and index files
 └── pyproject.toml               # Python project configuration (uv/pip)
 ```
@@ -296,6 +300,7 @@ Starting from the pre-trained checkpoint, SFT activates the compact memory encod
 # --- Training ---
 export CHIEF_IP=<chief-ip> INDEX=0
 bash scripts/train_robotwin_umi.sh   # Fine-tune from Hy-VLA-UMI on RoboTwin
+bash scripts/train_robodojo_umi.sh   # Fine-tune from Hy-VLA-UMI on RoboDojo HDF5
 
 # --- Evaluation ---
 export ROBOTWIN_DIR=/path/to/RoboTwin
@@ -309,6 +314,33 @@ bash scripts/eval_robotwin_full.sh
 ```
 
 > **Note:** The eval scripts automatically symlink `Hy-VLA/robotwin_eval/` → `RoboTwin/policy/hy_vla`, so that RoboTwin's `eval_policy.py` can discover the Hy-VLA policy adapter without any manual configuration.
+
+#### RoboDojo — Simulated Bimanual Manipulation
+
+RoboDojo fine-tuning uses the HDF5 layout consumed by
+`hy_vla.data.robodojo_dataset.RoboDojoVLADataset` and the config
+`hy_vla/config/dataset/robodojo_hdf5.yaml`. Generate normalization statistics
+with `scripts/compute_norm_robodojo.py`, then launch SFT:
+
+```bash
+python scripts/compute_norm_robodojo.py \
+    --hdf5-dir /path/to/robodojo/hdf5 \
+    --output /path/to/experiments/hy_vla_robodojo_umi/norm_stats.pkl \
+    --downsample-rate 1 \
+    --chunk-size 25 \
+    --umi-coord-frame
+
+CHIEF_IP=127.0.0.1 INDEX=0 NUM_MACHINES=1 NPROC_PER_NODE=8 \
+HDF5_DIR=/path/to/robodojo/hdf5 \
+EXP_ROOT=/path/to/experiments \
+NORM_PATH=/path/to/experiments/hy_vla_robodojo_umi/norm_stats.pkl \
+bash scripts/train_robodojo_umi.sh
+```
+
+For RoboDojo evaluation, use `robodojo_eval/deploy_policy.yml` and the
+`robodojo_eval.deploy_policy` hooks in your RoboDojo runner. The adapter packs
+RoboDojo observations into Hy-VLA batches and returns RoboDojo EE action
+dictionaries.
 
 #### RoboTwin 2.0 — Simulated Bimanual Manipulation
 

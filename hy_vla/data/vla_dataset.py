@@ -57,8 +57,12 @@ class VLADataset(Dataset):
         # Auto-detect backend via unified ``source`` key.
         #   source="robotwin"  → RoboTwinVLADataset  (RoboTwin)
         #   source="umi"       → LanceVLADataset  (UMI / Hy-Embodied)
+        #   source="robodojo"  → RoboDojoVLADataset
         dataset_source = getattr(config.dataset, "source", "robotwin")
-        if dataset_source == "umi":
+        if dataset_source == "robodojo":
+            from .robodojo_dataset import RoboDojoVLADataset
+            self.hdf5_dataset = RoboDojoVLADataset(config)
+        elif dataset_source == "umi":
             from .umi_dataset import LanceVLADataset
             self.hdf5_dataset = LanceVLADataset(config)
         else:
