@@ -209,7 +209,7 @@ episode = reader.get_episode(3)           # all frames of episode 3
 
 ### Example Episode Visualization
 
-https://github.com/user-attachments/assets/b4b8d807-4bc1-4c4d-9b3d-b7d674a4e251
+https://github.com/user-attachments/assets/d135a30a-fc5f-43e1-8cfd-616440e7180d
 
 You can render any episode locally:
 
@@ -231,7 +231,7 @@ The transform below is provided as a reference for aligning with the UMI coordin
 
 | Dataset | World Forward | World Left | World Up | Local Forward | Local Left | Local Up | Gripper Open | Gripper Close |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **UMI** | +X | +Y | +Z | +Y | +Z | +X | 0 | 90 |
+| **UMI** | +X | +Y | +Z | +Z | +X | +Y | 0 | 90 |
 | **RoboTwin** | +Y | -X | +Z | +X | +Y | +Z | 1 | 0 |
 > **Note:** The gripper value represents the travel distance of the parallel gripper in millimeters (mm). `0` indicates the gripper is fully open, and `90` indicates it is fully closed.
 

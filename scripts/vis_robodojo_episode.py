@@ -497,7 +497,6 @@ def render_3d_panel(state: np.ndarray, size: int, dpi: int = 100, *, umi_coord_f
         rot_l = R.from_quat(quat_l[t]).as_matrix()
         rot_r = R.from_quat(quat_r[t]).as_matrix()
 
-        sc_l._offsets3d
         sc_l._offsets3d = ([float(p_l[0])], [float(p_l[1])], [float(p_l[2])])
         sc_r._offsets3d = ([float(p_r[0])], [float(p_r[1])], [float(p_r[2])])
 
@@ -508,19 +507,6 @@ def render_3d_panel(state: np.ndarray, size: int, dpi: int = 100, *, umi_coord_f
             if col not in (sc_l, sc_r):  # preserve current-position markers
                 col.remove()
 
-        if t == 455:
-            DN = {0: "X", 1: "Y", 2: "Z"}
-            def fmt(v):
-                ma = np.argmax(np.abs(v)); s = "+" if v[ma] > 0 else "-"
-                return f"{s}{DN[ma]}"
-            print(f"\n[DEBUG frame {t}] UMI={umi_coord_frame}")
-            if umi_coord_frame:
-                print(f"  LEFT  UMI:  red(left)={fmt(rot_l[:,0])}  green(up)={fmt(rot_l[:,1])}  blue(fwd)={fmt(rot_l[:,2])}")
-                print(f"  RIGHT UMI:  red(left)={fmt(rot_r[:,0])}  green(up)={fmt(rot_r[:,1])}  blue(fwd)={fmt(rot_r[:,2])}")
-            else:
-                print(f"  LEFT  native: red(fwd)={fmt(rot_l[:,0])}  green(left)={fmt(rot_l[:,1])}  blue(up)={fmt(rot_l[:,2])}")
-                print(f"  RIGHT native: red(fwd)={fmt(rot_r[:,0])}  green(left)={fmt(rot_r[:,1])}  blue(up)={fmt(rot_r[:,2])}")
-            print()
         _plot_triad(ax_mk, p_l, rot_l, triad_len, TRIAD_L_COLORS)
         _plot_triad(ax_mk, p_r, rot_r, triad_len, TRIAD_R_COLORS)
 
@@ -690,7 +676,6 @@ def render_video(
 
     writer = imageio.get_writer(output_path, fps=fps, codec="libx264", format="FFMPEG")
     cursor_color = (40, 40, 40)
-    font = cv2.FONT_HERSHEY_SIMPLEX
 
     try:
         for t in tqdm(range(T), desc=f"Ep{episode_id}", unit="frame"):
