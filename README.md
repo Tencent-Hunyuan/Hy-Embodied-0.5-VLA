@@ -17,6 +17,7 @@ https://github.com/user-attachments/assets/fdd1966c-8453-4f6a-9758-238076d08ac4
 
 ## 🔥 Updates
 
+* **`[2026-07-09]`** 🤖 Added [RoboDojo](https://github.com/robodojo-benchmark/RoboDojo) benchmark support — including HDF5 dataset loader, training / evaluation scripts, and a policy adapter. Thanks to [XPolicyLab](https://github.com/XPolicyLab/XPolicyLab) for the contribution!
 * **`[2026-06-16]`** 🌐 Added ModelScope links for all models and data.
 * **`[2026-06-15]`** 🚀 We have released **Hy-Embodied-0.5-VLA** — including the codebase, the [`Hy-Embodied-0.5-VLA-UMI`](https://huggingface.co/tencent/Hy-Embodied-0.5-VLA-UMI) and [`Hy-Embodied-0.5-VLA-RoboTwin`](https://huggingface.co/tencent/Hy-Embodied-0.5-VLA-RoboTwin) models, and the [`Hy-Embodied-0.5-VLA-Data`](https://huggingface.co/datasets/tencent/Hy-Embodied-0.5-VLA-Data) egocentric UMI dataset (2K+ hours)!
 
