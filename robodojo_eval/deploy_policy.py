@@ -56,12 +56,14 @@ def _to_hwc_uint8_rgb(img: Any) -> np.ndarray:
     img = np.asarray(img)
     if img.ndim != 3:
         raise ValueError(f"Expected image ndim=3, got shape {img.shape}")
+    if img.shape[0] in (1, 3, 4) and img.shape[-1] not in (1, 3, 4):
+        img = np.transpose(img, (1, 2, 0))
     if img.shape[-1] == 4:
         img = img[..., :3]
-    elif img.shape[0] in (1, 3) and img.shape[-1] not in (1, 3, 4):
-        img = np.transpose(img, (1, 2, 0))
-    if img.shape[-1] == 1:
+    elif img.shape[-1] == 1:
         img = np.repeat(img, 3, axis=-1)
+    elif img.shape[-1] != 3:
+        raise ValueError(f"Expected 1, 3, or 4 image channels, got shape {img.shape}")
     if np.issubdtype(img.dtype, np.floating):
         img = (np.clip(img, 0.0, 1.0) * 255.0).astype(np.uint8)
     elif img.dtype != np.uint8:
