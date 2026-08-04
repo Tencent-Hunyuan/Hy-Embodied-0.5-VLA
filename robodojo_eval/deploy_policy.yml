@@ -20,6 +20,10 @@ exc_action_size: 10
 exc_action_interval: 1
 
 # --- MEM video-encoder cadence -------------------------------------------
+# step  : append a history frame on every observation update.
+# chunk : append one history frame per model forward/action chunk. The
+#   img_history_interval below remains expressed in action steps.
+history_cadence: chunk
 img_history_size: 6
 img_history_interval: 20
 
