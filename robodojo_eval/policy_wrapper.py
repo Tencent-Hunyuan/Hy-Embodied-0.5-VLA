@@ -113,6 +113,7 @@ class HyVLARoboDojoPolicyWrapper:
         with_absolute: bool = False,
         exc_action_size: int = 10,
         exc_action_interval: int = 1,
+        history_cadence: str = "step",
         img_history_size: int = 6,
         img_history_interval: int = 20,
         weight_dtype: torch.dtype = torch.bfloat16,
@@ -132,17 +133,29 @@ class HyVLARoboDojoPolicyWrapper:
         self._with_abs = bool(with_absolute)
         self.exc_action_size = int(exc_action_size)
         self.exc_action_interval = int(exc_action_interval)
+        self.history_cadence = str(history_cadence).lower()
         self.img_history_size = int(img_history_size)
         self.img_history_interval = int(img_history_interval)
         self.umi_coord_frame = bool(umi_coord_frame)
         self.umi_gripper_space = bool(umi_gripper_space)
 
         assert self.exc_action_interval >= 1, "exc_action_interval must be >= 1"
+        if self.history_cadence not in ("step", "chunk"):
+            raise ValueError(
+                "history_cadence must be 'step' or 'chunk', got "
+                f"{self.history_cadence!r}"
+            )
+        history_step_span = (
+            self.exc_action_size * self.exc_action_interval
+            if self.history_cadence == "chunk"
+            else self.exc_action_interval
+        )
         assert (
-            self.img_history_interval % self.exc_action_interval == 0
+            self.img_history_interval % history_step_span == 0
         ), (
             f"img_history_interval ({self.img_history_interval}) must be divisible "
-            f"by exc_action_interval ({self.exc_action_interval})"
+            f"by the {self.history_cadence} history span ({history_step_span} "
+            f"action steps) for strict temporal alignment"
         )
 
         self.config = HyVLAConfig.from_pretrained(ckpt_path)
@@ -184,16 +197,20 @@ class HyVLARoboDojoPolicyWrapper:
         self.update_obs_batch([obs])
 
     def update_obs_batch(self, obs_list: list[dict[str, Any]]) -> None:
+        """Store the latest observation for each environment.
+
+        Step-cadence history is appended for every observation update. Chunk
+        cadence appends immediately before inference so intermediate updates
+        do not create extra history entries.
+        """
         from .deploy_policy import encode_obs
 
         self._latest_env_idx_list = [int(obs.get("env_idx", i)) for i, obs in enumerate(obs_list)]
         for env_idx, obs in zip(self._latest_env_idx_list, obs_list):
             batch = encode_obs(obs)
             self._obs_by_env[env_idx] = batch
-            if self.use_video_encoder:
-                self._top_imgs_by_env.setdefault(env_idx, []).append(batch["raw_images.top_head"])
-                self._left_imgs_by_env.setdefault(env_idx, []).append(batch["raw_images.hand_left"])
-                self._right_imgs_by_env.setdefault(env_idx, []).append(batch["raw_images.hand_right"])
+            if self.use_video_encoder and self.history_cadence == "step":
+                self._append_history_frames(env_idx, batch)
 
     def get_action(self, batch: dict[str, Any] | None = None, **kwargs: Any) -> list[dict[str, np.ndarray]]:
         """Return one executable RoboDojo action chunk."""
@@ -233,14 +250,15 @@ class HyVLARoboDojoPolicyWrapper:
     def _store_batch(self, env_idx: int, batch: dict[str, Any]) -> None:
         self._latest_env_idx_list = [env_idx]
         self._obs_by_env[env_idx] = batch
-        if self.use_video_encoder:
-            self._top_imgs_by_env.setdefault(env_idx, []).append(batch["raw_images.top_head"])
-            self._left_imgs_by_env.setdefault(env_idx, []).append(batch["raw_images.hand_left"])
-            self._right_imgs_by_env.setdefault(env_idx, []).append(batch["raw_images.hand_right"])
+        if self.use_video_encoder and self.history_cadence == "step":
+            self._append_history_frames(env_idx, batch)
 
     @torch.no_grad()
     def _infer_chunk_wxyz(self, env_idx: int) -> np.ndarray:
         batch = self._obs_by_env[env_idx]
+
+        if self.use_video_encoder and self.history_cadence == "chunk":
+            self._append_history_frames(env_idx, batch)
 
         initial_wxyz = batch["observation.state"][0, :16].copy()
         initial_xyzw = initial_wxyz.copy()
@@ -339,6 +357,11 @@ class HyVLARoboDojoPolicyWrapper:
             )
         return _blend_dual_arm_pose_quat(rel_pose, abs_pose)
 
+    def _append_history_frames(self, env_idx: int, batch: dict[str, Any]) -> None:
+        self._top_imgs_by_env.setdefault(env_idx, []).append(batch["raw_images.top_head"])
+        self._left_imgs_by_env.setdefault(env_idx, []).append(batch["raw_images.hand_left"])
+        self._right_imgs_by_env.setdefault(env_idx, []).append(batch["raw_images.hand_right"])
+
     @staticmethod
     def _eval_history_indices(step_id: int, history_size: int, interval: int) -> list[int]:
         out = [max(step_id - (history_size - 1 - k) * interval, 0) for k in range(history_size)]
@@ -347,7 +370,12 @@ class HyVLARoboDojoPolicyWrapper:
 
     def _inject_history_stacks(self, batch: dict[str, Any], env_idx: int) -> None:
         history_size = self.img_history_size
-        interval = max(1, self.img_history_interval // self.exc_action_interval)
+        history_step_span = self.exc_action_interval
+        if self.history_cadence == "chunk":
+            history_step_span *= self.exc_action_size
+        # img_history_interval is expressed in action steps. Convert it to
+        # indices in the selected history cadence before sampling the buffer.
+        interval = self.img_history_interval // history_step_span
         top_buf = self._top_imgs_by_env[env_idx]
         left_buf = self._left_imgs_by_env[env_idx]
         right_buf = self._right_imgs_by_env[env_idx]
@@ -399,6 +427,7 @@ def build_policy(usr_args: dict[str, Any]) -> HyVLARoboDojoPolicyWrapper:
         with_absolute=bool(usr_args.get("with_absolute", False)),
         exc_action_size=int(usr_args.get("exc_action_size", 10)),
         exc_action_interval=int(usr_args.get("exc_action_interval", 1)),
+        history_cadence=usr_args.get("history_cadence", "step"),
         img_history_size=int(usr_args.get("img_history_size", 6)),
         img_history_interval=int(usr_args.get("img_history_interval", 20)),
         vlm_model_path=usr_args.get("vlm_model_path"),
