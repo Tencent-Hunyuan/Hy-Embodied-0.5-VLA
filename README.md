@@ -118,8 +118,10 @@ python scripts/quick_start.py --device xpu
 
 `scripts/quick_start.py` and the RoboTwin and RoboDojo adapters pick CUDA,
 then XPU, then CPU; the adapters also accept `device: xpu` in
-`deploy_policy.yml`. Training (`hy_vla/train.py` with DeepSpeed and Liger
-kernels) stays CUDA-only.
+`deploy_policy.yml`. The policy runs in bf16 by default; add
+`--dtype float16` (or `dtype: float16` in `deploy_policy.yml`) for fp16.
+Training (`hy_vla/train.py` with DeepSpeed and Liger kernels) stays
+CUDA-only.
 
 
 ## 🚀 Quick Start

@@ -399,6 +399,7 @@ def build_policy(usr_args: dict[str, Any]) -> HyVLAPolicyWrapper:
         img_history_interval=int(usr_args.get("img_history_interval", 1)),
         vlm_model_path=usr_args.get("vlm_model_path"),
         device=usr_args.get("device"),
+        weight_dtype=getattr(torch, str(usr_args.get("dtype", "bfloat16"))),
         umi_coord_frame=bool(usr_args.get("umi_coord_frame", False)),
         umi_gripper_space=bool(usr_args.get("umi_gripper_space", False)),
     )

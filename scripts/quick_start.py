@@ -24,6 +24,7 @@ Usage::
 
     python scripts/quick_start.py                 # CUDA, else Intel XPU, else CPU
     python scripts/quick_start.py --device xpu    # or pick the device
+    python scripts/quick_start.py --device xpu --dtype float16
 """
 
 import argparse
@@ -38,20 +39,25 @@ parser.add_argument(
     "--device", default=None,
     help="cuda, xpu or cpu (default: the first one available, in that order)",
 )
+parser.add_argument(
+    "--dtype", default="bfloat16", choices=["bfloat16", "float16", "float32"],
+    help="weights and activations dtype (default: bfloat16, as released)",
+)
 args = parser.parse_args()
 device = torch.device(args.device) if args.device else get_default_device()
+dtype = getattr(torch, args.dtype)
 
 ckpt = snapshot_download("tencent/Hy-Embodied-0.5-VLA-RoboTwin")
 
 config = HyVLAConfig.from_pretrained(ckpt)
 policy = HyVLA.from_pretrained(ckpt, config=config)
 policy.enable_video_encoder_if_needed()
-policy = policy.to(device=device, dtype=torch.bfloat16).eval()
+policy = policy.to(device=device, dtype=dtype).eval()
 
 # (B, K, C, H, W); K=6 history slots, slot K-1 is current
-img = torch.zeros(1, 6, 3, 224, 224, device=device, dtype=torch.bfloat16)
+img = torch.zeros(1, 6, 3, 224, 224, device=device, dtype=dtype)
 # normalized dual-arm EEF: [xyz(3) + rot6d(6) + gripper(1)]*2
-state = torch.zeros((1, config.max_state_dim), device=device, dtype=torch.bfloat16)
+state = torch.zeros((1, config.max_state_dim), device=device, dtype=dtype)
 batch = {
     "observation.images.top_head":   img,
     "observation.images.hand_left":  img,
