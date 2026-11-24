@@ -31,6 +31,7 @@ import numpy as np
 import torch
 
 from hy_vla import HyVLA, HyVLAConfig
+from hy_vla.utils.device import get_default_device
 from hy_vla.utils.transform_utils import (
     convert_PosQuat2PosRotationMatrix_batch,
     convert_frame_robo_to_umi,
@@ -120,6 +121,7 @@ class HyVLARoboDojoPolicyWrapper:
         vlm_model_path: str | None = None,
         umi_coord_frame: bool = True,
         umi_gripper_space: bool = False,
+        device: str | torch.device | None = None,
     ) -> None:
         if umi_gripper_space and not umi_coord_frame:
             raise ValueError("umi_gripper_space=true requires umi_coord_frame=true")
@@ -129,6 +131,7 @@ class HyVLARoboDojoPolicyWrapper:
             )
 
         self.weight_dtype = weight_dtype
+        self.device = torch.device(device) if device is not None else get_default_device()
         self.blend_mode = blend_mode
         self._with_abs = bool(with_absolute)
         self.exc_action_size = int(exc_action_size)
@@ -163,7 +166,7 @@ class HyVLARoboDojoPolicyWrapper:
             ckpt_path, config=self.config, vlm_model_path=vlm_model_path,
         )
         self.policy.enable_video_encoder_if_needed()
-        self.policy.cuda().eval()
+        self.policy.to(self.device).eval()
         self.policy = self.policy.to(self.weight_dtype)
 
         self.norm_data = get_norm_data(norm_path)
@@ -286,9 +289,9 @@ class HyVLARoboDojoPolicyWrapper:
             if key.startswith("raw_images.") or key == "task":
                 continue
             if isinstance(value, np.ndarray):
-                feed[key] = torch.from_numpy(value).to(self.weight_dtype).cuda()
+                feed[key] = torch.from_numpy(value).to(self.weight_dtype).to(self.device)
             elif isinstance(value, torch.Tensor):
-                feed[key] = value.to(self.weight_dtype).cuda()
+                feed[key] = value.to(self.weight_dtype).to(self.device)
             else:
                 feed[key] = value
         feed["task"] = net_batch["task"]
@@ -431,6 +434,8 @@ def build_policy(usr_args: dict[str, Any]) -> HyVLARoboDojoPolicyWrapper:
         img_history_size=int(usr_args.get("img_history_size", 6)),
         img_history_interval=int(usr_args.get("img_history_interval", 20)),
         vlm_model_path=usr_args.get("vlm_model_path"),
+        device=usr_args.get("device"),
+        weight_dtype=getattr(torch, str(usr_args.get("dtype", "bfloat16"))),
         umi_coord_frame=bool(usr_args.get("umi_coord_frame", True)),
         umi_gripper_space=bool(usr_args.get("umi_gripper_space", False)),
     )

@@ -53,8 +53,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
 
-# flash_attn is required by SpaceTimeBlock's spatial path.
-from flash_attn import flash_attn_func, flash_attn_varlen_func
+# flash_attn is used by SpaceTimeBlock's spatial path. Without it (Intel XPU,
+# CPU) the PyTorch SDPA fallback provides the same two functions.
+try:
+    from flash_attn import flash_attn_func, flash_attn_varlen_func
+except ImportError:
+    from hy_vla.hunyuan_vl_mot.flash_attn_fallback import (
+        flash_attn_func,
+        flash_attn_varlen_func,
+    )
 
 
 class SpaceTimeBlock(nn.Module):

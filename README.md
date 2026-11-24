@@ -102,6 +102,27 @@ uv sync
 pip install -r requirements.txt
 ```
 
+### Run on Intel GPU (XPU)
+
+Inference also runs on Intel GPUs (for example Arc Pro B60) through PyTorch's
+XPU backend. flash-attn is not needed there: when it is not installed, the
+vision and memory encoders use a PyTorch SDPA fallback
+(`hy_vla/hunyuan_vl_mot/flash_attn_fallback.py`).
+
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/xpu
+pip install -r requirements-xpu.txt
+pip install -e . --no-deps   # pyproject.toml pins a CUDA torch and flash-attn
+python scripts/quick_start.py --device xpu
+```
+
+`scripts/quick_start.py` and the RoboTwin and RoboDojo adapters pick CUDA,
+then XPU, then CPU; the adapters also accept `device: xpu` in
+`deploy_policy.yml`. The policy runs in bf16 by default; add
+`--dtype float16` (or `dtype: float16` in `deploy_policy.yml`) for fp16.
+Training (`hy_vla/train.py` with DeepSpeed and Liger kernels) stays
+CUDA-only.
+
 
 ## 🚀 Quick Start
 

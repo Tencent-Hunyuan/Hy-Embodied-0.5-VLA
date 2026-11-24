@@ -954,6 +954,15 @@ class HyVLAFlowMatching(nn.Module):
         for params in self.state_proj.parameters():
             params.requires_grad = self.config.train_state_proj
 
+    @property
+    def compute_dtype(self) -> torch.dtype:
+        """dtype of the transformer layers; the embeddings are cast to it.
+
+        bfloat16 as released, or the dtype the policy was cast to with
+        ``policy.to(dtype=...)`` (float16, or float32 for reference runs).
+        """
+        return self.dual_tower.vlm.dtype
+
     def sample_noise(self, shape, device):
         noise = torch.normal(
             mean=0.0,
@@ -1035,7 +1044,7 @@ class HyVLAFlowMatching(nn.Module):
             modality_mask.append(False)
 
             # embed image (bs, num_patches, emb_dim)
-            img_emb = self.dual_tower.embed_image(img).to(dtype=torch.bfloat16)
+            img_emb = self.dual_tower.embed_image(img).to(dtype=self.compute_dtype)
             num_patches, emb_dim = img_emb.shape[1], img_emb.shape[2]
             grid_size = int(num_patches ** 0.5)
             assert grid_size * grid_size == num_patches, 'num_patches must be square'
@@ -1114,7 +1123,7 @@ class HyVLAFlowMatching(nn.Module):
         # --- State token ----------------------------------------------------
         assert state is not None, "embed_suffix: ``state`` is required."
         state_emb = self.state_proj(state)
-        state_emb = state_emb.to(dtype=torch.bfloat16)
+        state_emb = state_emb.to(dtype=self.compute_dtype)
         # (B, D) -> (B, 1, D)
         state_block = state_emb[:, None, :]
         embs.append(state_block)
@@ -1135,10 +1144,10 @@ class HyVLAFlowMatching(nn.Module):
         time_emb = create_sinusoidal_pos_embedding(
             timestep, self.config.proj_width, min_period=4e-3, max_period=4.0, device=device
         )
-        time_emb = time_emb.type(dtype=torch.bfloat16)
+        time_emb = time_emb.type(dtype=self.compute_dtype)
 
         # Fuse timestep + action information using an MLP
-        action_emb = self.action_in_proj(noisy_actions.to(torch.bfloat16))  # torch.float32 -> bf16
+        action_emb = self.action_in_proj(noisy_actions.to(self.compute_dtype))  # float32 to the layer dtype
 
         time_emb = time_emb[:, None, :].expand_as(action_emb)
         action_time_emb = torch.cat([action_emb, time_emb], dim=2)  # torch.float32

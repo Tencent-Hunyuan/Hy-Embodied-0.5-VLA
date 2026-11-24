@@ -1,0 +1,26 @@
+# =============================================================================
+# Hy-VLA: inference requirements for Intel GPUs (XPU)
+# =============================================================================
+# Install PyTorch for XPU first, then this file:
+#
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/xpu
+#   pip install -r requirements-xpu.txt
+#
+# This is the inference subset of requirements.txt (modeling, quick start,
+# RoboTwin and RoboDojo adapters). Left out on purpose:
+#   * torch, torchvision: installed from the XPU index above.
+#   * flash-attn: CUDA only. When it is not installed, the PyTorch SDPA
+#     fallback in hy_vla/hunyuan_vl_mot/flash_attn_fallback.py is used.
+#   * the training stack (accelerate, deepspeed, diffusers, hydra-core,
+#     omegaconf, wandb, liger-kernel, imgaug, ...), the Lance dataset
+#     packages and the visualisation packages.
+# numpy is not capped below 2.0 here: Python 3.13 has no numpy 1.x wheel,
+# and the inference path was checked with numpy 2.
+# =============================================================================
+
+numpy>=1.24
+transformers>=4.57,<5
+safetensors>=0.4
+huggingface-hub>=0.23
+timm==1.0.21
+scipy>=1.11

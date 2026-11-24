@@ -60,7 +60,12 @@ try:
 except ImportError:
     _TIMM_AVAILABLE = False
 
-from flash_attn import flash_attn_func, flash_attn_varlen_func
+try:
+    from flash_attn import flash_attn_func, flash_attn_varlen_func
+except ImportError:
+    # flash-attn builds only for NVIDIA GPUs; on Intel XPU and CPU the
+    # PyTorch SDPA fallback provides the same two functions.
+    from .flash_attn_fallback import flash_attn_func, flash_attn_varlen_func
 
 from .configuration_hunyuan_vl_mot import HunYuanVLMoTConfig
 
@@ -315,7 +320,7 @@ def _flash_attention_forward_mot(module, query, key, value, attention_mask, drop
 
     if query.dtype == torch.float32:
         if torch.is_autocast_enabled():
-            target_dtype = torch.get_autocast_gpu_dtype()
+            target_dtype = torch.get_autocast_dtype(query.device.type)
         elif hasattr(module.config, "_pre_quantization_dtype"):
             target_dtype = module.config._pre_quantization_dtype
         else:

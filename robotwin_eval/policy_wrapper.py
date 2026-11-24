@@ -53,6 +53,7 @@ import torch
 from scipy.spatial.transform import Rotation as R, Slerp
 
 from hy_vla import HyVLAConfig, HyVLA
+from hy_vla.utils.device import get_default_device
 from hy_vla.utils.transform_utils import (
     convert_frame_robo_to_umi,
     convert_frame_umi_to_robo,
@@ -126,18 +127,20 @@ class HyVLAPolicyWrapper:
         vlm_model_path: str | None = None,
         umi_coord_frame: bool = False,
         umi_gripper_space: bool = False,
+        device: str | torch.device | None = None,
     ) -> None:
         # All architectural switches (chunk_size, use_video_encoder,
         # spacetime_layer_stride, past_drop_layer,
         # visual_segment_isolation) live in the ckpt's config.json and
         # are picked up automatically by ``HyVLAConfig.from_pretrained``.
         self.weight_dtype = weight_dtype
+        self.device = torch.device(device) if device is not None else get_default_device()
         self.config = HyVLAConfig.from_pretrained(ckpt_path)
         self.policy = HyVLA.from_pretrained(
             ckpt_path, config=self.config, vlm_model_path=vlm_model_path,
         )
         self.policy.enable_video_encoder_if_needed()
-        self.policy.cuda()
+        self.policy.to(self.device)
         self.policy.eval()
         self.policy = self.policy.to(self.weight_dtype)
 
@@ -247,9 +250,9 @@ class HyVLAPolicyWrapper:
 
         for k, v in batch.items():
             if isinstance(v, np.ndarray) and not k.startswith("raw_images.") and k != "task":
-                batch[k] = torch.from_numpy(v).to(self.weight_dtype).cuda()
+                batch[k] = torch.from_numpy(v).to(self.weight_dtype).to(self.device)
             elif isinstance(v, torch.Tensor):
-                batch[k] = v.to(self.weight_dtype).cuda()
+                batch[k] = v.to(self.weight_dtype).to(self.device)
 
         self.policy.reset()
         action0 = self.policy.select_action(batch)
@@ -395,6 +398,8 @@ def build_policy(usr_args: dict[str, Any]) -> HyVLAPolicyWrapper:
         img_history_size=int(usr_args.get("img_history_size", 1)),
         img_history_interval=int(usr_args.get("img_history_interval", 1)),
         vlm_model_path=usr_args.get("vlm_model_path"),
+        device=usr_args.get("device"),
+        weight_dtype=getattr(torch, str(usr_args.get("dtype", "bfloat16"))),
         umi_coord_frame=bool(usr_args.get("umi_coord_frame", False)),
         umi_gripper_space=bool(usr_args.get("umi_gripper_space", False)),
     )

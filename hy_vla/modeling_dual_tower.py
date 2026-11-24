@@ -499,7 +499,7 @@ class HyDualTower(PreTrainedModel):
                 query_states, key_states, value_states,
             )
 
-            att_output = att_output.to(dtype=torch.bfloat16)  # (b, seq_vlm, ...)
+            att_output = att_output.to(dtype=value_states.dtype)  # (b, seq_vlm, ...)
             att_vis_output.append(probs)  # probs (b, 8, seq, seq)
 
             outputs_embeds = []
